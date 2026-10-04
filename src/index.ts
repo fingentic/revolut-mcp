@@ -18,7 +18,7 @@ Configuration (environment variables):
   TOKEN_STORE_PATH          Token store path (default: ./.tokens.json)
   REVOLUT_ENVIRONMENT       sandbox (default) or production
 
-Docs: https://github.com/jeff-nasseri/revolut-mcp`;
+Docs: https://github.com/fingentic/revolut-mcp`;
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
