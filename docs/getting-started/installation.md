@@ -44,7 +44,7 @@ Both expose the same stdio MCP server. Set the configuration environment variabl
 
 ```bash
 # Clone the repository
-git clone https://github.com/jeff-nasseri/revolut-mcp.git
+git clone https://github.com/fingentic/revolut-mcp.git
 cd revolut-mcp
 
 # Install dependencies
@@ -61,7 +61,7 @@ The build step produces `dist/index.js`, which is the entry point you point your
 
 ### (c) Docker
 
-A prebuilt image is published to the GitHub Container Registry as `ghcr.io/jeff-nasseri/revolut-mcp`. Because the server speaks stdio, run the container with `-i` (interactive) so the MCP client can attach to the process's stdin/stdout:
+A prebuilt image is published to the GitHub Container Registry as `ghcr.io/fingentic/revolut-mcp`. Because the server speaks stdio, run the container with `-i` (interactive) so the MCP client can attach to the process's stdin/stdout:
 
 ```bash
 docker run -i --rm \
@@ -71,7 +71,7 @@ docker run -i --rm \
 -----END PRIVATE KEY-----" \
   -e REVOLUT_REDIRECT_URI=https://example.com/ \
   -e REVOLUT_ENVIRONMENT=sandbox \
-  ghcr.io/jeff-nasseri/revolut-mcp
+  ghcr.io/fingentic/revolut-mcp
 ```
 
 Passing the key inline with `REVOLUT_PRIVATE_KEY` avoids mounting a file. If you prefer a file, mount it and point `REVOLUT_PRIVATE_KEY_PATH` at the in-container path:
@@ -82,7 +82,7 @@ docker run -i --rm \
   -e REVOLUT_PRIVATE_KEY_PATH=/keys/privatekey.pem \
   -e REVOLUT_REDIRECT_URI=https://example.com/ \
   -v "$(pwd)/certs:/keys:ro" \
-  ghcr.io/jeff-nasseri/revolut-mcp
+  ghcr.io/fingentic/revolut-mcp
 ```
 
 > **Token persistence in Docker:** OAuth tokens are written to `TOKEN_STORE_PATH` (default `/app/.tokens.json` in the image). With `--rm` and no volume, that file is lost when the container exits, so you would have to re-authenticate each run. To keep tokens between runs, mount a volume and set `TOKEN_STORE_PATH` to a path inside it, e.g. `-v "$(pwd)/.revolut:/data" -e TOKEN_STORE_PATH=/data/.tokens.json`.

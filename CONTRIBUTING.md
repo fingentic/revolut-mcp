@@ -14,7 +14,7 @@ Thank you for your interest in contributing to revolut-mcp!
 ### Local Setup
 
 ```bash
-git clone https://github.com/jeff-nasseri/revolut-mcp.git
+git clone https://github.com/fingentic/revolut-mcp.git
 cd revolut-mcp
 npm install
 cp .env.sandbox.template .env

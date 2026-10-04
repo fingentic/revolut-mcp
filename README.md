@@ -1,4 +1,4 @@
-<!-- mcp-name: io.github.jeff-nasseri/revolut-mcp -->
+<!-- mcp-name: io.github.fingentic/revolut-mcp -->
 
 <p align="center">
   <img src="assets/revolut-mcp-banner.png" alt="Revolut MCP" width="100%" />
@@ -7,10 +7,10 @@
 <h1 align="center">Revolut MCP</h1>
 
 <p align="center">
-  <a href="https://github.com/jeff-nasseri/revolut-mcp/actions/workflows/publish.yml"><img alt="Pipeline" src="https://img.shields.io/github/actions/workflow/status/jeff-nasseri/revolut-mcp/publish.yml?branch=master&label=pipeline&style=flat-square&color=%23007ACC" /></a>
+  <a href="https://github.com/fingentic/revolut-mcp/actions/workflows/publish.yml"><img alt="Pipeline" src="https://img.shields.io/github/actions/workflow/status/fingentic/revolut-mcp/publish.yml?branch=master&label=pipeline&style=flat-square&color=%23007ACC" /></a>
   <a href="https://www.npmjs.com/package/@jeff-nasseri/revolut-mcp"><img alt="Deployment" src="https://img.shields.io/npm/v/@jeff-nasseri/revolut-mcp?label=deploy%20%40npm&style=flat-square&color=%2300C853" /></a>
-  <a href="https://github.com/jeff-nasseri/revolut-mcp/actions/workflows/publish.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/jeff-nasseri/revolut-mcp/publish.yml?branch=master&label=tests&style=flat-square&color=%2300C853" /></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/jeff-nasseri/revolut-mcp?style=flat-square&color=%23FF6B35" /></a>
+  <a href="https://github.com/fingentic/revolut-mcp/actions/workflows/publish.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/fingentic/revolut-mcp/publish.yml?branch=master&label=tests&style=flat-square&color=%2300C853" /></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/fingentic/revolut-mcp?style=flat-square&color=%23FF6B35" /></a>
 </p>
 
 ## Overview
