@@ -8,7 +8,7 @@
 # rendered pages) and deploys via the GitHub Pages Actions.
 #
 # Requirement: repository Settings → Pages → Source must be "GitHub Actions".
-# Published at: https://jeff-nasseri.github.io/revolut-mcp/
+# Published at: https://fingentic.github.io/revolut-mcp/
 # =============================================================================
 name: Deploy Docs to GitHub Pages
 

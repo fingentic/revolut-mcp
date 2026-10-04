@@ -159,7 +159,7 @@ jobs:
     # (and its mcpName field) for the version referenced in server.json.
     if: needs.version.outputs.should_publish == 'true' && needs.npm.result == 'success'
     permissions:
-      id-token: write # GitHub OIDC — proves ownership of the io.github.jeff-nasseri namespace
+      id-token: write # GitHub OIDC — proves ownership of the io.github.fingentic namespace
       contents: read
     steps:
       - uses: actions/checkout@v4

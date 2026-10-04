@@ -2,7 +2,7 @@
   "name": "@jeff-nasseri/revolut-mcp",
   "version": "0.0.0",
   "description": "MCP server for the Revolut Business API — accounts, transactions, counterparties, payments, transfers, FX, and team, over a scope-based tool architecture.",
-  "mcpName": "io.github.jeff-nasseri/revolut-mcp",
+  "mcpName": "io.github.fingentic/revolut-mcp",
   "main": "dist/index.js",
   "bin": {
     "revolut-mcp": "dist/index.js"
@@ -32,11 +32,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jeff-nasseri/revolut-mcp.git"
+    "url": "git+https://github.com/fingentic/revolut-mcp.git"
   },
-  "homepage": "https://github.com/jeff-nasseri/revolut-mcp#readme",
+  "homepage": "https://github.com/fingentic/revolut-mcp#readme",
   "bugs": {
-    "url": "https://github.com/jeff-nasseri/revolut-mcp/issues"
+    "url": "https://github.com/fingentic/revolut-mcp/issues"
   },
   "files": [
     "dist/**/*",
