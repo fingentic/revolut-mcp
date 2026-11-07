@@ -1,7 +1,16 @@
 # =============================================================================
 # CI — runs on every pull request to master.
-# Computes the version with GitVersion and runs the unit test suite across the
-# supported Node.js versions. Integration tests are env-gated and skipped here.
+#
+# The publish pipeline only runs after a merge, so anything that can break a
+# release has to be exercised here first:
+#   version : GitVersion resolves a version (same actions as the release)
+#   test    : unit suite on every supported Node.js version
+#   package : the npm publish setup (Node 24, registry-url, no token) as a dry
+#             run, then the packed tarball is installed into a clean directory
+#             and started through a real MCP handshake
+#   docker  : the image builds and its entrypoint runs
+# Integration tests are env-gated and skipped here. The actual npm publish
+# (trusted publishing) and the registry/GHCR/release steps only run on master.
 # =============================================================================
 name: CI
 
@@ -20,28 +29,30 @@ jobs:
       semVer: ${{ steps.gitversion.outputs.semVer }}
       majorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}
       assemblySemVer: ${{ steps.gitversion.outputs.assemblySemVer }}
+      major: ${{ steps.gitversion.outputs.major }}
+      minor: ${{ steps.gitversion.outputs.minor }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v0.10.2
+        uses: gittools/actions/gitversion/setup@v4.7.0
         with:
           versionSpec: "6.x"
 
+      # GitVersion.yml in the repository root is picked up automatically.
       - name: Determine Version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@v0.10.2
-        with:
-          useConfigFile: true
+        uses: gittools/actions/gitversion/execute@v4.7.0
 
       - name: Display GitVersion outputs
         run: |
           echo "SemVer:          ${{ steps.gitversion.outputs.semVer }}"
           echo "MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
           echo "AssemblySemVer:  ${{ steps.gitversion.outputs.assemblySemVer }}"
+          echo "Major.Minor:     ${{ steps.gitversion.outputs.major }}.${{ steps.gitversion.outputs.minor }}"
 
   test:
     name: Unit tests (Node ${{ matrix.node-version }})
@@ -50,11 +61,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["18", "20", "22"]
+        node-version: ["18", "20", "22", "24"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -67,3 +78,88 @@ jobs:
 
       - name: Run unit tests
         run: npm test
+
+  package:
+    name: Package (npm dry run and smoke test)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v6
+
+      # Same setup as the npm job in publish.yml, minus the OIDC permission.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Check npm supports trusted publishing
+        run: |
+          NPM_VERSION="$(npm --version)"
+          echo "node $(node --version), npm ${NPM_VERSION}"
+          if ! printf '11.5.1\n%s\n' "${NPM_VERSION}" | sort -V -C; then
+            echo "::error::npm ${NPM_VERSION} is too old for trusted publishing (needs >= 11.5.1)"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Set package version
+        run: npm version "${{ needs.version.outputs.majorMinorPatch }}" --no-git-tag-version --allow-same-version
+
+      # Nothing is sent. The explicit tag keeps the dry run independent of
+      # version ordering (npm refuses to apply `latest` to a lower version).
+      - name: Publish dry run
+        run: npm publish --dry-run --access public --tag ci-dry-run
+
+      - name: Pack
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Install the packed tarball into a clean directory
+        run: |
+          mkdir "$RUNNER_TEMP/smoke"
+          npm install --prefix "$RUNNER_TEMP/smoke" "$RUNNER_TEMP"/*.tgz
+          "$RUNNER_TEMP/smoke/node_modules/.bin/revolut-mcp" --version
+
+      - name: Smoke test the installed package
+        run: node scripts/smoke-test.cjs "$RUNNER_TEMP/smoke/node_modules/@jeff-nasseri/revolut-mcp/dist/index.js"
+
+  docker:
+    name: Docker image (build, no push)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Same inputs as the publish job, so a change here is validated before release.
+      - name: Extract image metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ needs.version.outputs.majorMinorPatch }}
+            type=raw,value=${{ needs.version.outputs.assemblySemVer }}
+            type=raw,value=${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: revolut-mcp:ci
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Smoke test the image
+        run: |
+          docker run --rm revolut-mcp:ci --help
+          docker run --rm --entrypoint node revolut-mcp:ci dist/index.js --version
