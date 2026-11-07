@@ -103,6 +103,46 @@ docs(readme): clarify sandbox setup
 3. Make sure `npm run lint`, `npm run build`, and `npm test` pass.
 4. Open a PR with a clear description; reference related issues with `Closes #N`.
 
+## Releasing
+
+Every push to `master` runs `.github/workflows/publish.yml`. GitVersion works out the version from
+the commit messages (see the table above), then the pipeline publishes:
+
+| Target | Authentication |
+|---|---|
+| npm `@jeff-nasseri/revolut-mcp` | npm trusted publishing (OIDC), no token stored |
+| Docker `ghcr.io/fingentic/revolut-mcp` | the built-in `GITHUB_TOKEN` |
+| MCP registry `io.github.fingentic/revolut-mcp` | GitHub OIDC |
+
+and finally tags `vX.Y.Z` and creates the GitHub release. Pull requests run `ci.yml`, which does a
+dry-run npm publish, installs the packed tarball into a clean directory and checks it starts and lists
+its tools, and builds the Docker image. A broken release setup should fail on the pull request, not
+after the merge.
+
+### npm trusted publishing (one-time setup)
+
+Tokens that can publish to npm expire after at most 90 days, so the pipeline holds no npm token.
+Instead, on npmjs.com open the package, then **Settings, Trusted publishing, GitHub Actions**, and enter:
+
+- Organization or user: `fingentic`
+- Repository: `revolut-mcp`
+- Workflow filename: `publish.yml`
+- Environment: leave empty
+
+If the form has an "Allowed actions" option, allow `npm publish`.
+
+The values are case sensitive and are not validated when you save them. A mismatch only shows up when
+publishing, as `404 Not Found` on the `PUT`, even though the package exists. If that happens, check the
+fields above, that the job has `id-token: write`, and that npm is at least 11.5.1 (the job checks
+this). `repository.url` in `package.json` must also match the GitHub repository exactly. npm's docs say
+a new trusted publisher configuration expires if no publish succeeds within two days.
+
+### Docker image visibility
+
+The first publish to a new GHCR package creates it as private. Change it to public once in the package
+settings (organization, Packages, `revolut-mcp`), otherwise `docker run ghcr.io/fingentic/revolut-mcp`
+fails for anyone who is not signed in.
+
 ## Code Style
 
 - TypeScript strict mode is enforced.
