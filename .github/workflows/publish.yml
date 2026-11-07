@@ -1,17 +1,27 @@
 # =============================================================================
 # Publish — runs on every push to master.
 # 1. version : compute the release version with GitVersion
-# 2. test    : run the unit suite across Node 18/20/22
+# 2. test    : run the unit suite across Node 18/20/22/24
 # 3. npm     : pack & publish to npm (version = majorMinorPatch, 3-part SemVer)
 # 4. docker  : build & push a multi-arch image to GHCR (tagged with both
 #              majorMinorPatch and the 4-part assemblySemVer)
-# 5. release : create the vX.Y.Z git tag + GitHub release
+# 5. registry: publish server.json to the MCP registry (after npm succeeds)
+# 6. release : create the vX.Y.Z git tag + GitHub release
 #
-# Secrets:
-#   NPM_TOKEN  — npm automation token with publish rights to the @jeff-nasseri
-#                scope (required for the npm job).
-#   GITHUB_TOKEN (built-in) — used to push the Docker image to GHCR and to
-#                create the release; no extra secret needed for Docker.
+# Authentication (no long-lived secrets are stored in this repository):
+#   npm          Trusted publishing over OIDC. npm tokens that can publish now
+#                expire after at most 90 days, so a stored NPM_TOKEN breaks on a
+#                schedule; OIDC mints a short-lived credential per run instead.
+#                One-time setup on npmjs.com, for the package: Settings ->
+#                Trusted publishing -> GitHub Actions ->
+#                  organization/user: fingentic
+#                  repository:        revolut-mcp
+#                  workflow filename: publish.yml
+#                Needs npm >= 11.5.1 (Node 24 ships it) and `id-token: write`.
+#                package.json `repository.url` must match this repository.
+#   MCP registry GitHub OIDC (`id-token: write`); proves the
+#                io.github.fingentic namespace.
+#   GHCR/release The built-in GITHUB_TOKEN (see each job's `permissions`).
 # =============================================================================
 name: Publish
 
@@ -19,6 +29,10 @@ on:
   push:
     branches:
       - master
+
+# Least privilege by default; jobs that need more declare it themselves.
+permissions:
+  contents: read
 
 jobs:
   version:
@@ -33,23 +47,23 @@ jobs:
       should_publish: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v0.10.2
+        uses: gittools/actions/gitversion/setup@v4.7.0
         with:
           versionSpec: "6.x"
 
+      # GitVersion.yml in the repository root is picked up automatically.
       - name: Determine Version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@v0.10.2
-        with:
-          useConfigFile: true
+        uses: gittools/actions/gitversion/execute@v4.7.0
 
       - name: Display resolved version
         run: |
+          echo "SemVer:          ${{ steps.gitversion.outputs.semVer }}"
           echo "MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
           echo "AssemblySemVer:  ${{ steps.gitversion.outputs.assemblySemVer }}"
 
@@ -60,10 +74,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["18", "20", "22"]
+        node-version: ["18", "20", "22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -76,14 +90,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: [version, test]
     if: needs.version.outputs.should_publish == 'true'
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC); no NPM_TOKEN is used
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: npm
+          # No dependency cache in the job that holds an OIDC token.
+          package-manager-cache: false
+
+      - name: Check npm supports trusted publishing
+        run: |
+          NPM_VERSION="$(npm --version)"
+          echo "node $(node --version), npm ${NPM_VERSION}"
+          if ! printf '11.5.1\n%s\n' "${NPM_VERSION}" | sort -V -C; then
+            echo "::error::npm ${NPM_VERSION} is too old for trusted publishing (needs >= 11.5.1)"
+            exit 1
+          fi
 
       - run: npm ci
 
@@ -101,8 +128,6 @@ jobs:
           else
             npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   docker:
     name: Build and push Docker image
@@ -113,16 +138,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -130,7 +155,7 @@ jobs:
 
       - name: Extract image metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -141,7 +166,7 @@ jobs:
             type=sha,format=short
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -162,7 +187,7 @@ jobs:
       id-token: write # GitHub OIDC — proves ownership of the io.github.fingentic namespace
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download mcp-publisher
         run: |
@@ -191,7 +216,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create and push git tag
         run: |
@@ -206,7 +231,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.majorMinorPatch }}
           name: Release v${{ needs.version.outputs.majorMinorPatch }}
