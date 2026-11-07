@@ -14,12 +14,12 @@ usage() {
     echo "  REVOLUT_ENVIRONMENT       sandbox (default) or production"
     echo ""
     echo "The server communicates over stdio (Model Context Protocol)."
-    exit 1
 }
 
 case "${1:-}" in
     --help | -h)
         usage
+        exit 0
         ;;
 esac
 
