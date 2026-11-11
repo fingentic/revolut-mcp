@@ -5,7 +5,8 @@
 # 3. npm     : pack & publish to npm (version = majorMinorPatch, 3-part SemVer)
 # 4. docker  : build & push a multi-arch image to GHCR (tagged with both
 #              majorMinorPatch and the 4-part assemblySemVer)
-# 5. registry: publish server.json to the MCP registry (after npm succeeds)
+# 5. registry: publish server.json to the MCP registry (after npm succeeds and
+#              the new version is actually served by npm, which can take minutes)
 # 6. release : create the vX.Y.Z git tag + GitHub release
 #
 # Authentication (no long-lived secrets are stored in this repository):
@@ -183,6 +184,7 @@ jobs:
     # Only after npm publish succeeds — the registry validates the npm package
     # (and its mcpName field) for the version referenced in server.json.
     if: needs.version.outputs.should_publish == 'true' && needs.npm.result == 'success'
+    timeout-minutes: 30
     permissions:
       id-token: write # GitHub OIDC — proves ownership of the io.github.fingentic namespace
       contents: read
@@ -201,6 +203,27 @@ jobs:
           VERSION="${{ needs.version.outputs.majorMinorPatch }}"
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/g" server.json
           cat server.json
+
+      # `npm publish` returns before the release is served ("Your package is being
+      # processed and may take a few minutes to become available"; about 5 minutes
+      # was observed). The registry validates against the public npm registry, so
+      # publishing straight away fails with "version was not found (status: 404)".
+      # Wait until the exact version is served. Logging in happens after the wait so
+      # its short-lived credential is still fresh.
+      - name: Wait for the npm release to become available
+        run: |
+          VERSION="${{ needs.version.outputs.majorMinorPatch }}"
+          URL="https://registry.npmjs.org/@jeff-nasseri%2Frevolut-mcp/${VERSION}"
+          for attempt in $(seq 1 80); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "${URL}")" = "200" ]; then
+              echo "@jeff-nasseri/revolut-mcp@${VERSION} is available on npm."
+              exit 0
+            fi
+            echo "Attempt ${attempt}/80: not available yet, retrying in 15s."
+            sleep 15
+          done
+          echo "::error::@jeff-nasseri/revolut-mcp@${VERSION} was not available on npm after 20 minutes"
+          exit 1
 
       - name: Authenticate with GitHub OIDC
         run: ./mcp-publisher login github-oidc
