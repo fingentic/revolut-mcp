@@ -114,7 +114,9 @@ the commit messages (see the table above), then the pipeline publishes:
 | Docker `ghcr.io/fingentic/revolut-mcp` | the built-in `GITHUB_TOKEN` |
 | MCP registry `io.github.fingentic/revolut-mcp` | GitHub OIDC |
 
-and finally tags `vX.Y.Z` and creates the GitHub release. Pull requests run `ci.yml`, which does a
+and finally tags `vX.Y.Z` and creates the GitHub release. npm processes a new release for a few
+minutes before it is served (about 5 minutes was observed), so the registry job waits for the exact
+version to appear before it publishes. Pull requests run `ci.yml`, which does a
 dry-run npm publish, installs the packed tarball into a clean directory and checks it starts and lists
 its tools, and builds the Docker image. A broken release setup should fail on the pull request, not
 after the merge.
